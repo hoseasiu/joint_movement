@@ -76,7 +76,7 @@ if __name__ == '__main__':
             writeData(posSmooth, velSmooth, rotSmooth, dataCounter)
             dataCounter+=1
 
-            dataLog = str(posSmooth[0]) + " " + str(posSmooth[1]) + " " + str(posSmooth[2]) + " " + str(velSmooth[0]) + " " + str(velSmooth[1]) + " " + str(velSmooth[2]) + " " + str(rotSmooth[0]) + str(rotSmooth[1]) + " " + str(rotSmooth[2]) + " " + str(rotSmooth[3])
+            dataLog = str(posSmooth[0]) + "," + str(posSmooth[1]) + "," + str(posSmooth[2]) + "," + str(velSmooth[0]) + "," + str(velSmooth[1]) + "," + str(velSmooth[2]) + "," + str(rotSmooth[0]) + str(rotSmooth[1]) + "," + str(rotSmooth[2]) + "," + str(rotSmooth[3])
             rospy.loginfo(dataLog)
             pub.publish(String(dataLog))
             
