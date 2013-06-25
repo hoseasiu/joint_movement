@@ -58,6 +58,7 @@ if __name__ == '__main__':
 
     while not rospy.is_shutdown():
         try:
+            print listener.getFrameStrings()
             # track the torso relative to the camera- TODO - can also track any other joint
             (trans,rot) = listener.lookupTransform('/openni_depth_frame', '/torso_3', rospy.Time(0))
                         

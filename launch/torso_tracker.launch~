@@ -1,3 +1,0 @@
-<launch>
-	<node pkg="joint_movement" type="joint_tf_listener.py" name="listener" />
-</launch>
