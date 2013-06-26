@@ -28,6 +28,7 @@ def addToMovingWindow(elements, windowSize, *deque):
             i.popleft()
 
     for i in range(len(deque[0])):
+#        print i, "elements length:", len(elements), "deque length:", len(deque[0])
         deque[0][i].append(elements[i])
 
     return deque
@@ -76,7 +77,7 @@ if __name__ == '__main__':
                 if s not in prevSkeletonList:
                     prevTorsoPos.append([0,0,0])
                     currentTorsoPosDeques.append((deque([]), deque([]), deque([])))                         # tuple of 3 deques for x, y, and z positions
-                    currentOrientationDeques.append((deque([]), deque([]), deque([]), deque([])))              # tuple of 4 deques for qx, qy, qz, and qw rotations
+                    currentOrientationDeques.append((deque([]), deque([]), deque([])))                      # tuple of 3 deques for rpy rotations
                     velocityTfBroadcasters.append(tf.TransformBroadcaster())                                # add a new broadcaster for representing velocities
                     orientationTfBroadcasters.append(tf.TransformBroadcaster())                             # add a new broadcaster for representing orientations
 
@@ -119,7 +120,7 @@ if __name__ == '__main__':
                 oVecScaled = [x*5 for x in oVec]                         # scale the orientation so it's easier to see on rviz
                 velSmoothScaled = [x*10 for x in velSmooth]              # scale the velocity vector so it's easier to see in rviz
                 
-                velocityTfBroadcasters[sIndex].sendTransform([velSmoothScaled[2], velSmoothScaled[0], velSmoothScaled[1]], tf.transformations.quaternion_from_euler(velSmoothScaled[0], velSmoothScaled[1], velSmoothScaled[2]), rospy.Time.now(), "velocity_"+str(s), "torso_"+str(s))
+                velocityTfBroadcasters[sIndex].sendTransform([velSmoothScaled[1], velSmoothScaled[2], velSmoothScaled[0]], tf.transformations.quaternion_from_euler(0, 0, 0), rospy.Time.now(), "velocity_"+str(s), "torso_"+str(s))
                 
                 orientationTfBroadcasters[sIndex].sendTransform([0,0,-1], tf.transformations.quaternion_from_euler(oVecScaled[0],oVecScaled[1],oVecScaled[2]), rospy.Time.now(), "orientation_"+str(s), "torso_"+str(s))
 
@@ -127,7 +128,7 @@ if __name__ == '__main__':
 
                 # smooth out the orientation data
                 addToMovingWindow(oVec, windowSize, currentOrientationDeques[sIndex])
-                oVecSmooth = [average(currentOrientationDeques[sIndex][0]), average(currentOrientationDeques[sIndex][1]), average(currentOrientationDeques[sIndex][2]), average(currentOrientationDeques[sIndex][3])]
+                oVecSmooth = [average(currentOrientationDeques[sIndex][0]), average(currentOrientationDeques[sIndex][1]), average(currentOrientationDeques[sIndex][2])]
                 
                 # TODO - correct this for new format
                 dataLog = str(s), str(posSmooth[0]), str(posSmooth[1]), str(posSmooth[2]), str(velSmooth[0]), str(velSmooth[1]), str(velSmooth[2]), str(oVecSmooth[0]), str(oVecSmooth[1]), str(oVecSmooth[2])
