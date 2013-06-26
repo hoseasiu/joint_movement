@@ -9,7 +9,6 @@ from std_msgs.msg import String
 from collections import deque
 import xlwt
 from numpy import *
-#from numpy import 
 
 # take a simple average
 def average(numList):
@@ -53,11 +52,14 @@ if __name__ == '__main__':
     pub = rospy.Publisher('joint_state', String)		# start the rostopic to be published to
     listener = tf.TransformListener()                   # start the transform listener
 
+    velocityTfBroadcasters = []                         # vector of transforms that represent users' velocities
+    orientationTfBroadcasters = []                      # vector of transforms that represent users' orientations
+
     prevSkeletonList = []                               # tracks users that are entering/leaving frame to create position and rotation arrays appropriately
     
     prevTorsoPos = []                                   # stores 3-element vectors of previous positions for instantaneous velocity calculations
     currentTorsoPosDeques = []                          # stores 3-element tuples (each element is a deque of up to 10 elements) of positions for smoothed positions (arrays of x, y and z)
-    currentTorsoRotDeques = []                          # stores 4-element tuples (each element is a deque of up to 10 elements) of rotations for smoothed positions (arrays of qx, qy, qz, and qw)
+    currentOrientationDeques = []                          # stores 4-element tuples (each element is a deque of up to 10 elements) of rotations for smoothed positions (arrays of qx, qy, qz, and qw)
 
     timeWindow = 1                                      # seconds
     windowSize = timeWindow*10                          # 10 frames per second
@@ -67,15 +69,17 @@ if __name__ == '__main__':
             skeletonList = getSkeletonList(listener.getFrameStrings())
             
             # TODO - assumes that the skeletonList never loses members, only gains them... valid assumption? (if it is, that probably needs to be changed)
-            # TODO - scan over the currentTorsoPosDeques and currentTorsoRotDeques to remove skeletons that have stopped moving entirely (not actually present anymore)
+            # TODO - scan over the currentTorsoPosDeques and currentOrientationDeques to remove skeletons that have stopped moving entirely (not actually present anymore)
                 # maybe use a count of some kind so that they are removed only after ~3-5 seconds of nonactivity instead of 1?
             
             for s in skeletonList:
                 if s not in prevSkeletonList:
                     prevTorsoPos.append([0,0,0])
                     currentTorsoPosDeques.append((deque([]), deque([]), deque([])))                         # tuple of 3 deques for x, y, and z positions
-                    currentTorsoRotDeques.append((deque([]), deque([]), deque([]), deque([])))              # tuple of 4 deques for qx, qy, qz, and qw rotations
-            
+                    currentOrientationDeques.append((deque([]), deque([]), deque([]), deque([])))              # tuple of 4 deques for qx, qy, qz, and qw rotations
+                    velocityTfBroadcasters.append(tf.TransformBroadcaster())                                # add a new broadcaster for representing velocities
+                    orientationTfBroadcasters.append(tf.TransformBroadcaster())                             # add a new broadcaster for representing orientations
+
                 # position in the list does NOT necessarily correspond to the skeleton number
                 sIndex = skeletonList.index(s)
                 
@@ -100,31 +104,44 @@ if __name__ == '__main__':
                 hVec = matrix(transRightHip)-matrix(transLeftHip)               # hip vector (left to right)
                 
                 oVec = (cross(tVec,sVec)+cross(tVec,hVec))                      # sum of (tVec cross sVec) and (tVec cross hVec)
-                oVec = oVec/linalg.norm(oVec)                                   # divide by the norm to get the unit vector
-                
+                oVec = oVec/linalg.norm(oVec)                                   # divide by the norm to get the unit vector (orientation is always a unit vector)
+                oVec = oVec[0]                                                  # change from matrix to vector
+
                 print "Skeleton ID:", s
                 print "position", posSmooth
                 print "velocity", velSmooth
                 print "orientation", oVec
                 print "----------------------------- \n"
 
-                # smooth out the rotation data
-                addToMovingWindow(rotTorso, windowSize, currentTorsoRotDeques[sIndex])
-                rotSmooth = [average(currentTorsoRotDeques[sIndex][0]), average(currentTorsoRotDeques[sIndex][1]), average(currentTorsoRotDeques[sIndex][2]), average(currentTorsoRotDeques[sIndex][3])]
+                # visualization section ######################
+                # broadcast transforms for visualization (can comment out later for speed)
+                
+                oVecScaled = [x*5 for x in oVec]                         # scale the orientation so it's easier to see on rviz
+                velSmoothScaled = [x*10 for x in velSmooth]              # scale the velocity vector so it's easier to see in rviz
+                
+                velocityTfBroadcasters[sIndex].sendTransform([velSmoothScaled[2], velSmoothScaled[0], velSmoothScaled[1]], tf.transformations.quaternion_from_euler(velSmoothScaled[0], velSmoothScaled[1], velSmoothScaled[2]), rospy.Time.now(), "velocity_"+str(s), "torso_"+str(s))
+                
+                orientationTfBroadcasters[sIndex].sendTransform([0,0,-1], tf.transformations.quaternion_from_euler(oVecScaled[0],oVecScaled[1],oVecScaled[2]), rospy.Time.now(), "orientation_"+str(s), "torso_"+str(s))
+
+                ###############################################
+
+                # smooth out the orientation data
+                addToMovingWindow(oVec, windowSize, currentOrientationDeques[sIndex])
+                oVecSmooth = [average(currentOrientationDeques[sIndex][0]), average(currentOrientationDeques[sIndex][1]), average(currentOrientationDeques[sIndex][2]), average(currentOrientationDeques[sIndex][3])]
                 
                 # TODO - correct this for new format
-                dataLog = str(posSmooth[0]) + "," + str(posSmooth[1]) + "," + str(posSmooth[2]) + "," + str(velSmooth[0]) + "," + str(velSmooth[1]) + "," + str(velSmooth[2]) + "," + str(rotSmooth[0]) + str(rotSmooth[1]) + "," + str(rotSmooth[2]) + "," + str(rotSmooth[3])
+                dataLog = str(s), str(posSmooth[0]), str(posSmooth[1]), str(posSmooth[2]), str(velSmooth[0]), str(velSmooth[1]), str(velSmooth[2]), str(oVecSmooth[0]), str(oVecSmooth[1]), str(oVecSmooth[2])
 #                print dataLog
 #                rospy.loginfo(dataLog)
 #                pub.publish(String(dataLog))
-
-                # publish a velocity and orientation arrow (point plus transform from torso?)
-                
+               
                 prevTorsoPos[sIndex] = posSmooth
+            
+            # put any new skeletons into the old skeleton list
             prevSkeletonList = skeletonList
             rospy.Rate(10.0).sleep()            # checking at 10 hz
           	  
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            print "I'm not getting anything from the transform"
+            print "I'm not getting anything from the transform. Did you start openni_tracker?"
             rospy.Rate(1.0).sleep()             # checks every second to see if the data is coming through
             continue
